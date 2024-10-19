@@ -7,11 +7,10 @@ class ResearchPaperApp:
         self.master = master
         self.master.title("Research Paper Repository")
         self.master.geometry("400x300")
-
         self.db = mysql.connector.connect(
             host="localhost",
-            user="root",
-            password="1234",
+            user="root", # set according to own server username
+            password="1234", # set according to own server password
             database="research_paper_repository"
         )
         self.cursor = self.db.cursor()
