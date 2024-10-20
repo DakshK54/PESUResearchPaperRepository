@@ -81,22 +81,18 @@ class ResearchPaperApp:
                 # Start a transaction
                 #self.db.start_transaction()
 
-                # Insert into main table
                 columns_str = ", ".join(data.keys())
                 values_str = ", ".join(["%s"] * len(data))
                 query = f"INSERT INTO {table} ({columns_str}) VALUES ({values_str})"
                 self.cursor.execute(query, tuple(data.values()))
 
-                # Get the last inserted ID
                 last_id = self.cursor.lastrowid
 
-                # Handle linked tables
                 if table == 'Research_papers':
                     self.handle_paper_relations(last_id, data)
                 elif table == 'Users':
                     self.handle_user_relations(last_id, data)
 
-                # Commit the transaction
                 self.db.commit()
                 messagebox.showinfo("Success", "Data added successfully!")
                 add_window.destroy()
@@ -119,7 +115,7 @@ class ResearchPaperApp:
         if 'authors' in data and data['authors']:
             author_ids = [int(id.strip()) for id in data['authors'].split(',')]
             for author_id in author_ids:
-                # Check if the author exists in Users
+                # if the author exists in Users
                 self.cursor.execute("SELECT * FROM Users WHERE user_id = %s", (author_id,))
                 if self.cursor.fetchone():
                     self.cursor.execute("INSERT INTO Paper_authors (paper_id, author_id) VALUES (%s, %s)", (paper_id, author_id))
@@ -155,6 +151,7 @@ class ResearchPaperApp:
                                         (user_id, resource_type, access_level))
                 else:
                     messagebox.showwarning("Warning", f"Invalid access right: {right}. Skipping.")
+                   
                     
     def delete_data(self, table):
         delete_window = tk.Toplevel(self.master)
