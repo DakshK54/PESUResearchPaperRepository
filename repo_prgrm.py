@@ -6,7 +6,7 @@ class ResearchPaperApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Research Paper Repository")
-        self.master.geometry("400x300")
+        self.master.geometry("1200x600")
         
         try:
             icon = PhotoImage(file="pesu.jpg")
