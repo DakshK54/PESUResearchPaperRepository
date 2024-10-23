@@ -13,7 +13,7 @@ class ResearchPaperApp:
             self.db = mysql.connector.connect(
                 host="localhost",
                 user="root",
-                password="hello@1234",
+                password="1234",
                 database="research_paper_repository"
             )
             self.cursor = self.db.cursor()
