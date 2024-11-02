@@ -1,6 +1,6 @@
 import mysql.connector
 import tkinter as tk
-from tkinter import ttk, messagebox, PhotoImage
+from tkinter import ttk, messagebox, PhotoImage, filedialog
 
 class ResearchPaperApp:
     def __init__(self, master):
@@ -9,41 +9,33 @@ class ResearchPaperApp:
         self.master.geometry("1200x600")
         
         try:
-            icon = PhotoImage(file="pesu.jpg")
+            icon = PhotoImage(file="D:\Daksh\Visual Studio Code\Sem-5\MiniProject_DBMS\pesu.jpg")
             self.master.iconphoto(False, icon)
         except Exception as e:
             print(f"Error loading icon: {e}")
 
+        # Database connection
         self.db = mysql.connector.connect(
             host="localhost",
             user="root",
-            password="hello@1234",
+            password="1234",
             database="research_paper_repository"
         )
         self.cursor = self.db.cursor()
 
-        # List of tables that users are allowed to view or update
-        self.allowed_tables = ['Research_papers']  # Add more tables if necessary
-
         self.create_widgets()
 
     def create_widgets(self):
-        # Table selection
+        # Table selection (only 'Research_papers' as an option)
         ttk.Label(self.master, text="Select Table:").pack(pady=10)
         self.table_var = tk.StringVar()
-        self.table_combo = ttk.Combobox(self.master, textvariable=self.table_var)
-        self.table_combo['values'] = self.get_allowed_tables()
+        self.table_combo = ttk.Combobox(self.master, textvariable=self.table_var, state="readonly")
+        self.table_combo['values'] = ["Research_papers"]
+        self.table_combo.current(0)  # Default to 'Research_papers'
         self.table_combo.pack(pady=5)
-        self.table_combo.bind('<<ComboboxSelected>>', self.on_table_select)
-        
-        try:
-            icon = PhotoImage(file="pesu.jpg")
-            self.master.iconphoto(False, icon)
-        except Exception as e:
-            print(f"Error loading icon: {e}")
 
         # Operation selection
-        ttk.Label(self.master, text="Select Operation:").pack(pady=10)
+        ttk.Label(self.master, text="Select Operation for Research Papers:").pack(pady=10)
         self.operation_var = tk.StringVar()
         ttk.Radiobutton(self.master, text="Add", variable=self.operation_var, value="add").pack()
         ttk.Radiobutton(self.master, text="Delete", variable=self.operation_var, value="delete").pack()
@@ -51,63 +43,63 @@ class ResearchPaperApp:
         # Execute button
         ttk.Button(self.master, text="Execute", command=self.execute_operation).pack(pady=20)
 
-    def get_allowed_tables(self):
-        """Fetch tables but only return the ones the user is allowed to interact with."""
-        self.cursor.execute("SHOW TABLES")
-        all_tables = [table[0] for table in self.cursor.fetchall()]
-        # Only return tables that are in the allowed list
-        return [table for table in all_tables if table in self.allowed_tables]
-
-    def on_table_select(self, event):
-        # This method can be expanded to show table-specific fields
-        pass
-
     def execute_operation(self):
-        table = self.table_var.get()
         operation = self.operation_var.get()
 
-        if not table or not operation:
-            messagebox.showerror("Error", "Please select both a table and an operation.")
+        if not operation:
+            messagebox.showerror("Error", "Please select an operation.")
             return
 
         if operation == "add":
-            self.add_data(table)
+            self.add_data()
         elif operation == "delete":
-            self.delete_data(table)
+            self.delete_data()
 
-
-    def add_data(self, table):
+    def add_data(self):
         add_window = tk.Toplevel(self.master)
-        add_window.title(f"Add data to {table}")
+        add_window.title("Add Research Paper")
 
-        self.cursor.execute(f"DESCRIBE {table}")
+        # Fetch columns for Research_papers table
+        self.cursor.execute("DESCRIBE Research_papers")
         columns = [column[0] for column in self.cursor.fetchall()]
 
         entries = {}
         for column in columns:
-            ttk.Label(add_window, text=column).pack()
-            entries[column] = ttk.Entry(add_window)
-            entries[column].pack()
+            if column != 'pdf_data':  # Skip pdf_data field for entry (handled separately)
+                ttk.Label(add_window, text=column).pack()
+                entries[column] = ttk.Entry(add_window)
+                entries[column].pack()
+
+        # PDF upload section
+        ttk.Label(add_window, text="Upload PDF:").pack()
+
+        def select_pdf():
+            file_path = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
+            if file_path:
+                with open(file_path, 'rb') as file:
+                    self.pdf_data = file.read()
+
+        ttk.Button(add_window, text="Select PDF", command=select_pdf).pack()
 
         def submit():
-            data = {column: entry.get() for column, entry in entries.items()}
-            
+            data = {column: entry.get() for column, entry in entries.items() if column != 'pdf_data'}
+
             try:
                 # Start a transaction
                 self.db.start_transaction()
 
-                # Insert into main table
+                # Insert into main table without the pdf_data
                 columns_str = ", ".join(data.keys())
                 values_str = ", ".join(["%s"] * len(data))
-                query = f"INSERT INTO {table} ({columns_str}) VALUES ({values_str})"
+                query = f"INSERT INTO Research_papers ({columns_str}) VALUES ({values_str})"
                 self.cursor.execute(query, tuple(data.values()))
 
                 # Get the last inserted ID
                 last_id = self.cursor.lastrowid
 
-                # Handle linked tables if necessary
-                if table == 'Research_papers':
-                    self.handle_paper_relations(last_id, data)
+                # Insert the PDF data
+                if hasattr(self, 'pdf_data'):
+                    self.cursor.execute("UPDATE Research_papers SET pdf_data = %s WHERE paper_id = %s", (self.pdf_data, last_id))
 
                 # Commit the transaction
                 self.db.commit()
@@ -119,47 +111,12 @@ class ResearchPaperApp:
 
         ttk.Button(add_window, text="Submit", command=submit).pack(pady=10)
         
-    def handle_paper_relations(self, paper_id, data):
-        # Ensure that paper_id exists in Research_papers before proceeding
-        self.cursor.execute("SELECT * FROM Research_papers WHERE paper_id = %s", (paper_id,))
-        if not self.cursor.fetchone():
-            messagebox.showerror("Error", f"Paper with ID {paper_id} does not exist.")
-            return
-
-        # Handle Paper_authors
-        if 'authors' in data and data['authors']:
-            author_ids = [int(id.strip()) for id in data['authors'].split(',')]
-            for author_id in author_ids:
-                # Check if the author exists in Users
-                self.cursor.execute("SELECT * FROM Users WHERE user_id = %s", (author_id,))
-                if self.cursor.fetchone():
-                    self.cursor.execute("INSERT INTO Paper_authors (paper_id, author_id) VALUES (%s, %s)", (paper_id, author_id))
-                else:
-                    messagebox.showwarning("Warning", f"Author with ID {author_id} does not exist. Skipping.")
-    
-        # Handle Paper_keywords
-        if 'keywords' in data and data['keywords']:
-            keywords = [keyword.strip() for keyword in data['keywords'].split(',')]
-            for keyword in keywords:
-                self.cursor.execute("INSERT INTO Paper_keywords (paper_id, keyword) VALUES (%s, %s)", (paper_id, keyword))
-
-        # Handle Paper_research_areas
-        if 'research_areas' in data and data['research_areas']:
-            area_ids = [int(id.strip()) for id in data['research_areas'].split(',')]
-            for area_id in area_ids:
-                # Check if the research area exists in Research_areas
-                self.cursor.execute("SELECT * FROM Research_areas WHERE area_id = %s", (area_id,))
-                if self.cursor.fetchone():
-                    self.cursor.execute("INSERT INTO Paper_research_areas (paper_id, area_id) VALUES (%s, %s)", (paper_id, area_id))
-                else:
-                    messagebox.showwarning("Warning", f"Research area with ID {area_id} does not exist. Skipping.")
-    
-    def delete_data(self, table):
+    def delete_data(self):
         delete_window = tk.Toplevel(self.master)
-        delete_window.title(f"Delete data from {table}")
+        delete_window.title("Delete data from Research Papers")
 
-        self.cursor.execute(f"SHOW KEYS FROM {table} WHERE Key_name = 'PRIMARY'")
-        primary_key = self.cursor.fetchone()[4]  # Column_name is at index 4
+        # Get the primary key for Research_papers (assuming it's paper_id)
+        primary_key = 'paper_id'
 
         ttk.Label(delete_window, text=f"Enter {primary_key} to delete:").pack()
         id_entry = ttk.Entry(delete_window)
@@ -176,17 +133,13 @@ class ResearchPaperApp:
                 self.db.start_transaction()
 
                 # Check if the record exists
-                self.cursor.execute(f"SELECT * FROM {table} WHERE {primary_key} = %s", (id_value,))
+                self.cursor.execute(f"SELECT * FROM Research_papers WHERE {primary_key} = %s", (id_value,))
                 if not self.cursor.fetchone():
                     messagebox.showinfo("Info", "No matching record found.")
                     return
 
-                # Handle linked tables if necessary
-                if table == 'Research_papers':
-                    self.delete_paper_relations(id_value)
-
-                # Delete from main table
-                query = f"DELETE FROM {table} WHERE {primary_key} = %s"
+                # Delete from Research_papers table
+                query = f"DELETE FROM Research_papers WHERE {primary_key} = %s"
                 self.cursor.execute(query, (id_value,))
 
                 # Commit the transaction
@@ -199,15 +152,6 @@ class ResearchPaperApp:
                 messagebox.showerror("Error", f"An error occurred: {err}")
 
         ttk.Button(delete_window, text="Delete", command=confirm_delete).pack(pady=10)
-    
-    def delete_paper_relations(self, paper_id):
-        # Set reviewer_id to NULL in Paper_reviews
-        self.cursor.execute("UPDATE Paper_reviews SET reviewer_id = NULL WHERE paper_id = %s", (paper_id,))
-        
-        # Delete from other related tables
-        self.cursor.execute("DELETE FROM Paper_authors WHERE paper_id = %s", (paper_id,))
-        self.cursor.execute("DELETE FROM Paper_keywords WHERE paper_id = %s", (paper_id,))
-        self.cursor.execute("DELETE FROM Paper_research_areas WHERE paper_id = %s", (paper_id,))
 
 if __name__ == "__main__":
     root = tk.Tk()

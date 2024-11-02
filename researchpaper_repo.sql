@@ -1,3 +1,4 @@
+DROP DATABASE Research_Paper_Repository;
 CREATE DATABASE IF NOT EXISTS Research_Paper_Repository;
 
 USE Research_Paper_Repository;
@@ -25,9 +26,9 @@ CREATE TABLE Research_papers (
     citation_count INT,
     journal_name VARCHAR(100),
     publication_year INT,
-    file_path VARCHAR(255),
     approval_status ENUM('Pending', 'Approved', 'Rejected'),
-    version INT DEFAULT 1
+    version INT DEFAULT 1,
+    pdf_data LONGBLOB  -- Column to store PDF files as binary data
 );
 
 CREATE TABLE Paper_reviews (
