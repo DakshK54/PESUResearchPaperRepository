@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Research Papers</title>
+</head>
+<body>
+    <h1>Research Papers</h1>
+    <a href="{% url 'add_paper' %}">Add Paper</a>
+    <a href="{% url 'delete_paper' %}">Delete Paper</a>
+    
+    <ul>
+        {% for paper in papers %}
+            <li>{{ paper.title }} by {{ paper.author }} ({{ paper.approval_status }})</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

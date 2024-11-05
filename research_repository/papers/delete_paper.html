@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete Research Paper</title>
+</head>
+<body>
+    <h1>Delete Research Paper</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Delete Paper</button>
+    </form>
+    <a href="{% url 'list_papers' %}">Back to List</a>
+</body>
+</html>

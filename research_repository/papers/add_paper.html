@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Research Paper</title>
+</head>
+<body>
+    <h1>Add Research Paper</h1>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Add Paper</button>
+    </form>
+    <a href="{% url 'list_papers' %}">Back to List</a>
+</body>
+</html>
