@@ -84,41 +84,89 @@ class ResearchPaperApp:
 
         # Input fields for keywords, authors, and research areas
         ttk.Label(add_window, text="Enter Keywords (comma-separated):").pack()
-        keyword_entry = ttk.Entry(add_window)
-        keyword_entry.pack()
+        self.keyword_entry = ttk.Entry(add_window)
+        self.keyword_entry.pack()
 
         ttk.Label(add_window, text="Enter Author IDs (comma-separated):").pack()
-        author_entry = ttk.Entry(add_window)
-        author_entry.pack()
+        self.author_entry = ttk.Entry(add_window)
+        self.author_entry.pack()
 
         ttk.Label(add_window, text="Enter Research Area IDs (comma-separated):").pack()
-        area_entry = ttk.Entry(add_window)
-        area_entry.pack()
+        self.area_entry = ttk.Entry(add_window)
+        self.area_entry.pack()
 
-        def submit():
-            data = {column: entry.get() for column, entry in entries.items()}
+        ttk.Button(add_window, text="Submit", command=self.submit).pack(pady=10)
 
-            # Prepare JSON inputs for keywords, authors, and research areas
-            keywords_json = json.dumps([k.strip() for k in keyword_entry.get().split(",") if k.strip()])
-            authors_json = json.dumps([int(a.strip()) for a in author_entry.get().split(",") if a.strip().isdigit()])
-            areas_json = json.dumps([int(a.strip()) for a in area_entry.get().split(",") if a.strip().isdigit()])
+    def submit(self):
+        data = {column: entry.get() for column, entry in entries.items()}
 
-            try:
-                # Call stored procedure to add research paper
-                query = """CALL AddResearchPaper(%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-                self.cursor.execute(query, (data['title'], data['abstract'], data['doi'],
-                                             data['journal_name'], data['publication_year'],
-                                             self.pdf_data, keywords_json, authors_json, areas_json))
+        # Prepare JSON inputs for keywords, authors, and research areas
+        keywords_json = json.dumps([k.strip() for k in self.keyword_entry.get().split(",") if k.strip()])
+        authors_json = json.dumps([int(a.strip()) for a in self.author_entry.get().split(",") if a.strip().isdigit()])
+        areas_json = json.dumps([int(a.strip()) for a in self.area_entry.get().split(",") if a.strip().isdigit()])
 
-                # Commit the transaction
-                self.db.commit()
+        try:
+            # Call stored procedure to add research paper
+            query = """CALL AddResearchPaper(%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+            self.cursor.execute(query, (data['title'], data['abstract'], data['doi'],
+                                        data['journal_name'], data['publication_year'],
+                                        self.pdf_data, keywords_json, authors_json, areas_json))
+
+            # Commit the transaction
+            self.db.commit()
+
+            # Check if any author IDs were not found in the users table
+            missing_authors = [int(a) for a in authors_json.strip('[]').split(',') if a.strip().isdigit() and int(a) not in self.get_existing_author_ids()]
+            if missing_authors:
+                self.add_missing_authors(missing_authors)
+                messagebox.showinfo("Success", "Data added successfully! Please add the missing authors.")
+            else:
                 messagebox.showinfo("Success", "Data added successfully!")
-                add_window.destroy()
-            except mysql.connector.Error as err:
-                self.db.rollback()
-                messagebox.showerror("Error", f"An error occurred: {err}")
 
-        ttk.Button(add_window, text="Submit", command=submit).pack(pady=10)
+            add_window.destroy()
+        except mysql.connector.Error as err:
+            self.db.rollback()
+            messagebox.showerror("Error", f"An error occurred: {err}")
+
+    def get_existing_author_ids(self):
+        self.cursor.execute("SELECT user_id FROM users")
+        return [row[0] for row in self.cursor.fetchall()]
+
+    def add_missing_authors(self, missing_author_ids):
+        add_author_window = tk.Toplevel(self.master)
+        add_author_window.title("Add Missing Authors")
+
+        author_entries = {}
+        for author_id in missing_author_ids:
+            ttk.Label(add_author_window, text=f"Author ID: {author_id}").pack()
+
+            author_data = {}
+            for column in ['first_name', 'last_name', 'email', 'affiliation']:
+                ttk.Label(add_author_window, text=column.replace('_', ' ').capitalize()).pack()
+                author_data[column] = ttk.Entry(add_author_window)
+                author_data[column].pack()
+
+            author_entries[author_id] = author_data
+
+        def save_authors():
+            for author_id, entry_data in author_entries.items():
+                first_name = entry_data['first_name'].get()
+                last_name = entry_data['last_name'].get()
+                email = entry_data['email'].get()
+                affiliation = entry_data['affiliation'].get()
+                
+                try:
+                    query = "INSERT INTO users (user_id, first_name, last_name, email, affiliation) VALUES (%s, %s, %s, %s, %s)"
+                    self.cursor.execute(query, (author_id, first_name, last_name, email, affiliation))
+                    self.db.commit()
+                except mysql.connector.Error as err:
+                    self.db.rollback()
+                    messagebox.showerror("Error", f"An error occurred while adding author {author_id}: {err}")
+
+            messagebox.showinfo("Success", "Missing authors added successfully!")
+            add_author_window.destroy()
+
+        ttk.Button(add_author_window, text="Save Authors", command=save_authors).pack(pady=10)
 
     def delete_data(self):
         delete_window = tk.Toplevel(self.master)
@@ -156,6 +204,8 @@ class ResearchPaperApp:
             except mysql.connector.Error as err:
                 self.db.rollback()
                 messagebox.showerror("Error", f"An error occurred: {err}")
+
+        ttk.Button(delete_window, text="Confirm Delete", command=confirm_delete).pack(pady=10)
 
 if __name__ == "__main__":
     root = tk.Tk()

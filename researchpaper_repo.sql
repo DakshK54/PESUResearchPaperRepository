@@ -91,7 +91,8 @@ DELIMITER ;
 
 -- Procedure for Adding a Research Paper with Validation
 DELIMITER //
-CREATE PROCEDURE AddResearchPaper (
+
+CREATE PROCEDURE AddResearchPaper(
     IN p_title VARCHAR(255),
     IN p_abstract TEXT,
     IN p_doi VARCHAR(50),
@@ -100,54 +101,52 @@ CREATE PROCEDURE AddResearchPaper (
     IN p_pdf_data LONGBLOB,
     IN p_keywords JSON,
     IN p_authors JSON,
-    IN p_research_areas JSON
+    IN p_areas JSON
 )
 BEGIN
-    DECLARE paperId INT;
+    DECLARE paper_id INT;
+    DECLARE keyword VARCHAR(50);
+    DECLARE author_id INT;
+    DECLARE area_id INT;
+    DECLARE keyword_count INT;
+    DECLARE author_count INT;
+    DECLARE area_count INT;
 
-    -- Insert main paper record
+    -- Insert research paper
     INSERT INTO Research_papers (title, abstract, doi, journal_name, publication_year, pdf_data)
     VALUES (p_title, p_abstract, p_doi, p_journal_name, p_publication_year, p_pdf_data);
-    
-    SET paperId = LAST_INSERT_ID();
+
+    -- Get the last inserted paper ID
+    SET paper_id = LAST_INSERT_ID();
 
     -- Insert keywords
-    DECLARE keyword VARCHAR(50);
-    DECLARE keywordCursor CURSOR FOR SELECT value FROM JSON_TABLE(p_keywords, '$[*]' COLUMNS(value VARCHAR(50) PATH '$'));
-
-    OPEN keywordCursor;
-    FETCH keywordCursor INTO keyword;
-    WHILE keyword IS NOT NULL DO
-        INSERT INTO Paper_keywords (paper_id, keyword) VALUES (paperId, keyword);
-        FETCH keywordCursor INTO keyword;
+    SET keyword_count = JSON_LENGTH(p_keywords);
+    SET @i = 0;
+    WHILE @i < keyword_count DO
+        SET keyword = JSON_EXTRACT(p_keywords, CONCAT('$[', @i, ']'));
+        INSERT INTO Paper_keywords (paper_id, keyword) VALUES (paper_id, keyword);
+        SET @i = @i + 1;
     END WHILE;
-    CLOSE keywordCursor;
 
     -- Insert authors
-    DECLARE authorId INT;
-    DECLARE authorCursor CURSOR FOR SELECT value FROM JSON_TABLE(p_authors, '$[*]' COLUMNS(value INT PATH '$'));
-
-    OPEN authorCursor;
-    FETCH authorCursor INTO authorId;
-    WHILE authorId IS NOT NULL DO
-        INSERT INTO Paper_authors (paper_id, author_id) VALUES (paperId, authorId);
-        FETCH authorCursor INTO authorId;
+    SET author_count = JSON_LENGTH(p_authors);
+    SET @j = 0;
+    WHILE @j < author_count DO
+        SET author_id = JSON_EXTRACT(p_authors, CONCAT('$[', @j, ']'));
+        INSERT INTO Paper_authors (paper_id, author_id) VALUES (paper_id, author_id);
+        SET @j = @j + 1;
     END WHILE;
-    CLOSE authorCursor;
 
     -- Insert research areas
-    DECLARE areaId INT;
-    DECLARE areaCursor CURSOR FOR SELECT value FROM JSON_TABLE(p_research_areas, '$[*]' COLUMNS(value INT PATH '$'));
-
-    OPEN areaCursor;
-    FETCH areaCursor INTO areaId;
-    WHILE areaId IS NOT NULL DO
-        INSERT INTO Paper_research_areas (paper_id, area_id) VALUES (paperId, areaId);
-        FETCH areaCursor INTO areaId;
+    SET area_count = JSON_LENGTH(p_areas);
+    SET @k = 0;
+    WHILE @k < area_count DO
+        SET area_id = JSON_EXTRACT(p_areas, CONCAT('$[', @k, ']'));
+        INSERT INTO Paper_research_areas (paper_id, area_id) VALUES (paper_id, area_id);
+        SET @k = @k + 1;
     END WHILE;
-    CLOSE areaCursor;
-
 END //
+
 DELIMITER ;
 
 -- Trigger to Cascade Delete Related Records in Other Tables
