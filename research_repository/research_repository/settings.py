@@ -80,7 +80,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'Research_Paper_Repository',
         'USER': 'root',
-        'PASSWORD': 'hello@1234',
+        'PASSWORD': '1234',
         'HOST': 'localhost',
         'PORT': '3306',
     }
@@ -105,6 +105,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+AUTH_USER_MODEL = 'papers.User'
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/

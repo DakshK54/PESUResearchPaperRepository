@@ -1,13 +1,14 @@
 import mysql.connector
 import tkinter as tk
 from tkinter import ttk, messagebox, PhotoImage, filedialog
+import json
 
 class ResearchPaperApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Research Paper Repository")
         self.master.geometry("1200x600")
-        
+
         try:
             icon = PhotoImage(file="D:\Daksh\Visual Studio Code\Sem-5\MiniProject_DBMS\pesu.jpg")
             self.master.iconphoto(False, icon)
@@ -19,7 +20,7 @@ class ResearchPaperApp:
             host="localhost",
             user="root",
             password="1234",
-            database="research_paper_repository"
+            database="Research_Paper_Repository"
         )
         self.cursor = self.db.cursor()
 
@@ -65,7 +66,7 @@ class ResearchPaperApp:
 
         entries = {}
         for column in columns:
-            if column != 'pdf_data':  # Skip pdf_data field for entry (handled separately)
+            if column not in ['pdf_data', 'paper_id']:  # Skip pdf_data and paper_id field for entry (handled separately)
                 ttk.Label(add_window, text=column).pack()
                 entries[column] = ttk.Entry(add_window)
                 entries[column].pack()
@@ -81,25 +82,33 @@ class ResearchPaperApp:
 
         ttk.Button(add_window, text="Select PDF", command=select_pdf).pack()
 
+        # Input fields for keywords, authors, and research areas
+        ttk.Label(add_window, text="Enter Keywords (comma-separated):").pack()
+        keyword_entry = ttk.Entry(add_window)
+        keyword_entry.pack()
+
+        ttk.Label(add_window, text="Enter Author IDs (comma-separated):").pack()
+        author_entry = ttk.Entry(add_window)
+        author_entry.pack()
+
+        ttk.Label(add_window, text="Enter Research Area IDs (comma-separated):").pack()
+        area_entry = ttk.Entry(add_window)
+        area_entry.pack()
+
         def submit():
-            data = {column: entry.get() for column, entry in entries.items() if column != 'pdf_data'}
+            data = {column: entry.get() for column, entry in entries.items()}
+
+            # Prepare JSON inputs for keywords, authors, and research areas
+            keywords_json = json.dumps([k.strip() for k in keyword_entry.get().split(",") if k.strip()])
+            authors_json = json.dumps([int(a.strip()) for a in author_entry.get().split(",") if a.strip().isdigit()])
+            areas_json = json.dumps([int(a.strip()) for a in area_entry.get().split(",") if a.strip().isdigit()])
 
             try:
-                # Start a transaction
-                self.db.start_transaction()
-
-                # Insert into main table without the pdf_data
-                columns_str = ", ".join(data.keys())
-                values_str = ", ".join(["%s"] * len(data))
-                query = f"INSERT INTO Research_papers ({columns_str}) VALUES ({values_str})"
-                self.cursor.execute(query, tuple(data.values()))
-
-                # Get the last inserted ID
-                last_id = self.cursor.lastrowid
-
-                # Insert the PDF data
-                if hasattr(self, 'pdf_data'):
-                    self.cursor.execute("UPDATE Research_papers SET pdf_data = %s WHERE paper_id = %s", (self.pdf_data, last_id))
+                # Call stored procedure to add research paper
+                query = """CALL AddResearchPaper(%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                self.cursor.execute(query, (data['title'], data['abstract'], data['doi'],
+                                             data['journal_name'], data['publication_year'],
+                                             self.pdf_data, keywords_json, authors_json, areas_json))
 
                 # Commit the transaction
                 self.db.commit()
@@ -110,7 +119,7 @@ class ResearchPaperApp:
                 messagebox.showerror("Error", f"An error occurred: {err}")
 
         ttk.Button(add_window, text="Submit", command=submit).pack(pady=10)
-        
+
     def delete_data(self):
         delete_window = tk.Toplevel(self.master)
         delete_window.title("Delete data from Research Papers")
@@ -129,9 +138,6 @@ class ResearchPaperApp:
                 return
 
             try:
-                # Start a transaction
-                self.db.start_transaction()
-
                 # Check if the record exists
                 self.cursor.execute(f"SELECT * FROM Research_papers WHERE {primary_key} = %s", (id_value,))
                 if not self.cursor.fetchone():
@@ -150,8 +156,6 @@ class ResearchPaperApp:
             except mysql.connector.Error as err:
                 self.db.rollback()
                 messagebox.showerror("Error", f"An error occurred: {err}")
-
-        ttk.Button(delete_window, text="Delete", command=confirm_delete).pack(pady=10)
 
 if __name__ == "__main__":
     root = tk.Tk()
