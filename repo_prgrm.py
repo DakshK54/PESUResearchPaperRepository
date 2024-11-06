@@ -56,23 +56,31 @@ class ResearchPaperApp:
         elif operation == "delete":
             self.delete_data()
 
+    def get_existing_author_ids(self):
+
+        self.cursor.execute("SELECT user_id FROM Users")
+
+        # Fetch all results and store them in a set for faster lookup
+        result = self.cursor.fetchall()
+        return {row[0] for row in result}
+
     def add_data(self):
-        add_window = tk.Toplevel(self.master)
-        add_window.title("Add Research Paper")
+        self.add_window = tk.Toplevel(self.master)
+        self.add_window.title("Add Research Paper")
 
         # Fetch columns for Research_papers table
         self.cursor.execute("DESCRIBE Research_papers")
         columns = [column[0] for column in self.cursor.fetchall()]
 
-        entries = {}
+        self.entries = {}
         for column in columns:
-            if column not in ['pdf_data', 'paper_id']:  # Skip pdf_data and paper_id field for entry (handled separately)
-                ttk.Label(add_window, text=column).pack()
-                entries[column] = ttk.Entry(add_window)
-                entries[column].pack()
+            if column not in ['pdf_data', 'paper_id']:  
+                ttk.Label(self.add_window, text=column).pack()
+                self.entries[column] = ttk.Entry(self.add_window)
+                self.entries[column].pack()
 
         # PDF upload section
-        ttk.Label(add_window, text="Upload PDF:").pack()
+        ttk.Label(self.add_window, text="Upload PDF:").pack()
 
         def select_pdf():
             file_path = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
@@ -80,30 +88,66 @@ class ResearchPaperApp:
                 with open(file_path, 'rb') as file:
                     self.pdf_data = file.read()
 
-        ttk.Button(add_window, text="Select PDF", command=select_pdf).pack()
+        ttk.Button(self.add_window, text="Select PDF", command=select_pdf).pack()
 
         # Input fields for keywords, authors, and research areas
-        ttk.Label(add_window, text="Enter Keywords (comma-separated):").pack()
-        self.keyword_entry = ttk.Entry(add_window)
+        ttk.Label(self.add_window, text="Enter Keywords (comma-separated):").pack()
+        self.keyword_entry = ttk.Entry(self.add_window)
         self.keyword_entry.pack()
 
-        ttk.Label(add_window, text="Enter Author IDs (comma-separated):").pack()
-        self.author_entry = ttk.Entry(add_window)
+        ttk.Label(self.add_window, text="Enter Author IDs (comma-separated):").pack()
+        self.author_entry = ttk.Entry(self.add_window)
         self.author_entry.pack()
 
-        ttk.Label(add_window, text="Enter Research Area IDs (comma-separated):").pack()
-        self.area_entry = ttk.Entry(add_window)
+        ttk.Label(self.add_window, text="Enter Research Area IDs (comma-separated):").pack()
+        self.area_entry = ttk.Entry(self.add_window)
         self.area_entry.pack()
 
-        ttk.Button(add_window, text="Submit", command=self.submit).pack(pady=10)
+        ttk.Button(self.add_window, text="Submit", command=self.submit).pack(pady=10)
+
+    def verify_and_insert_authors(self, authors):
+        #Verifies each author_id exists in the Users table, inserts if missing, and returns the final list.
+        verified_authors = []
+        
+        for author_id in authors:
+            # Check if author exists
+            self.cursor.execute("SELECT user_id FROM Users WHERE user_id = %s", (author_id,))
+            result = self.cursor.fetchone()
+
+            if result:
+                # Author exists, add to verified list
+                verified_authors.append(author_id)
+            else:
+                # Author does not exist, insert a new row with placeholder data
+                try:
+                    query = "INSERT INTO Users (user_id, username, password, role, email, affiliation) VALUES (%s, %s, %s, %s, %s, %s)"
+                    self.cursor.execute(query, (author_id, f"author{author_id}", "default_password", "Researcher", f"author{author_id}@example.com", "Unknown Affiliation"))
+                    self.db.commit()  # Commit the insertion immediately
+                    verified_authors.append(author_id)  # Add to verified list after successful insert
+                except mysql.connector.Error as err:
+                    self.db.rollback()
+                    messagebox.showerror("Error", f"An error occurred while adding author {author_id}: {err}")
+                    return []  # Return an empty list to indicate failure
+
+        return verified_authors  # Return the final list of confirmed author IDs
 
     def submit(self):
-        data = {column: entry.get() for column, entry in entries.items()}
+        # Collect data for the new research paper
+        data = {column: entry.get() for column, entry in self.entries.items()}
 
         # Prepare JSON inputs for keywords, authors, and research areas
         keywords_json = json.dumps([k.strip() for k in self.keyword_entry.get().split(",") if k.strip()])
-        authors_json = json.dumps([int(a.strip()) for a in self.author_entry.get().split(",") if a.strip().isdigit()])
+        raw_authors = [int(a.strip()) for a in self.author_entry.get().split(",") if a.strip().isdigit()]
         areas_json = json.dumps([int(a.strip()) for a in self.area_entry.get().split(",") if a.strip().isdigit()])
+
+        # Verify authors in the Users table, insert if they don't exist
+        authors = self.verify_and_insert_authors(raw_authors)
+        if not authors:
+            messagebox.showerror("Error", "Failed to verify or insert authors. Check log for details.")
+            return
+
+        # Convert authors list to JSON for stored procedure
+        authors_json = json.dumps(authors)
 
         try:
             # Call stored procedure to add research paper
@@ -114,19 +158,12 @@ class ResearchPaperApp:
 
             # Commit the transaction
             self.db.commit()
+            messagebox.showinfo("Success", "Data added successfully!")
 
-            # Check if any author IDs were not found in the users table
-            missing_authors = [int(a) for a in authors_json.strip('[]').split(',') if a.strip().isdigit() and int(a) not in self.get_existing_author_ids()]
-            if missing_authors:
-                self.add_missing_authors(missing_authors)
-                messagebox.showinfo("Success", "Data added successfully! Please add the missing authors.")
-            else:
-                messagebox.showinfo("Success", "Data added successfully!")
-
-            add_window.destroy()
         except mysql.connector.Error as err:
             self.db.rollback()
             messagebox.showerror("Error", f"An error occurred: {err}")
+
 
     def get_existing_author_ids(self):
         self.cursor.execute("SELECT user_id FROM users")

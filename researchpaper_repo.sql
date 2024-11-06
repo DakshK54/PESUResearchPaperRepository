@@ -111,6 +111,7 @@ BEGIN
     DECLARE keyword_count INT;
     DECLARE author_count INT;
     DECLARE area_count INT;
+    DECLARE author_exists INT DEFAULT 0;
 
     -- Insert research paper
     INSERT INTO Research_papers (title, abstract, doi, journal_name, publication_year, pdf_data)
@@ -123,7 +124,7 @@ BEGIN
     SET keyword_count = JSON_LENGTH(p_keywords);
     SET @i = 0;
     WHILE @i < keyword_count DO
-        SET keyword = JSON_EXTRACT(p_keywords, CONCAT('$[', @i, ']'));
+        SET keyword = JSON_UNQUOTE(JSON_EXTRACT(p_keywords, CONCAT('$[', @i, ']')));
         INSERT INTO Paper_keywords (paper_id, keyword) VALUES (paper_id, keyword);
         SET @i = @i + 1;
     END WHILE;
@@ -132,7 +133,17 @@ BEGIN
     SET author_count = JSON_LENGTH(p_authors);
     SET @j = 0;
     WHILE @j < author_count DO
-        SET author_id = JSON_EXTRACT(p_authors, CONCAT('$[', @j, ']'));
+        SET author_id = JSON_UNQUOTE(JSON_EXTRACT(p_authors, CONCAT('$[', @j, ']')));
+
+        -- Check if author exists
+        SELECT COUNT(*) INTO author_exists FROM Users WHERE user_id = author_id;
+        IF author_exists = 0 THEN
+            -- Insert new author if not exists
+            INSERT INTO Users (user_id, username, password, role, email, affiliation)
+            VALUES (author_id, CONCAT('author', author_id), 'default_password', 'Researcher', CONCAT('author', author_id, '@example.com'), 'Unknown Affiliation');
+        END IF;
+
+        -- Insert into Paper_authors table
         INSERT INTO Paper_authors (paper_id, author_id) VALUES (paper_id, author_id);
         SET @j = @j + 1;
     END WHILE;
@@ -141,7 +152,7 @@ BEGIN
     SET area_count = JSON_LENGTH(p_areas);
     SET @k = 0;
     WHILE @k < area_count DO
-        SET area_id = JSON_EXTRACT(p_areas, CONCAT('$[', @k, ']'));
+        SET area_id = JSON_UNQUOTE(JSON_EXTRACT(p_areas, CONCAT('$[', @k, ']')));
         INSERT INTO Paper_research_areas (paper_id, area_id) VALUES (paper_id, area_id);
         SET @k = @k + 1;
     END WHILE;
