@@ -1,9 +1,7 @@
-# PESU Research Paper Repository
-    
-### DBMS/SE Mini-Project
+# Research Paper Repository Management System
 
-    Research Paper Repository, made on python.
-    Add/Remove research papers, Authors, edit citations, review research papers.
+Research Paper Repository Management System, made on python.
+Add/Remove research papers, Authors, edit citations, review research papers.
 
 - run researchpaper_repo.sql
 - run ResearchPaperRepository.py
